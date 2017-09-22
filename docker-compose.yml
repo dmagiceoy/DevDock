@@ -17,15 +17,21 @@ services:
             args:
                 - INSTALL_XDEBUG=${WORKSPACE_INSTALL_XDEBUG}
                 - INSTALL_NODE=${WORKSPACE_INSTALL_NODE}
+                - INSTALL_SOAP=${WORKSPACE_INSTALL_SOAP}
                 - INSTALL_YARN=${WORKSPACE_INSTALL_YARN}
                 - COMPOSER_GLOBAL_INSTALL=${WORKSPACE_COMPOSER_GLOBAL_INSTALL}
+                - INSTALL_WORKSPACE_SSH=${WORKSPACE_INSTALL_WORKSPACE_SSH}
                 - PUID=${WORKSPACE_PUID}
                 - PGID=${WORKSPACE_PGID}
                 - NODE_VERSION=${WORKSPACE_NODE_VERSION}
                 - YARN_VERSION=${WORKSPACE_YARN_VERSION}
                 - TZ=${WORKSPACE_TIMEZONE}
+            dockerfile: "Dockerfile-${PHP_VERSION}"
         volumes_from:
             - applications
+        volumes:
+            - ${WORKSPACE_XDEBUG_CONF}:/etc/php/7.1/cli/conf.d/xdebug.ini
+            - ${WORKSPACE_CRONTAB}:/etc/cron.d
         extra_hosts:
             - "dockerhost:${DOCKER_HOST_IP}"
         tty: true
@@ -41,11 +47,13 @@ services:
                 - INSTALL_ZIP_ARCHIVE=${PHP_FPM_INSTALL_ZIP_ARCHIVE}
                 - INSTALL_PHPREDIS=${PHP_FPM_INSTALL_PHPREDIS}
                 - INSTALL_MEMCACHED=${PHP_FPM_INSTALL_MEMCACHED}
-                - INSTALL_OPCACHE=${PHP_FPM_INSTALL_OPCACHE}
-                - INSTALL_MYSQLI=${PHP_FPM_INSTALL_MYSQLI}
-            dockerfile: Dockerfile-71
+            dockerfile: Dockerfile-${PHP_VERSION}
         volumes_from:
             - applications
+        volumes:
+            - ${PHP_FPM_XDEBUG_CONF}:/etc/php/7.1/cli/conf.d/xdebug.ini
+            - ${PHP_FPM_INI_CONF}:/usr/local/etc/php/conf.d/site.ini
+            - ${PHP_FPM_POOL_CONF}:/usr/local/etc/php-fpm.d/site.pool.ini
         expose:
             - "9000"
         links:
@@ -54,6 +62,21 @@ services:
             - "dockerhost:${DOCKER_HOST_IP}"
         environment:
             - PHP_IDE_CONFIG=${PHP_IDE_CONFIG}
+
+### PHP Worker Container #####################################
+
+    php-worker:
+      build:
+        context: ./php-worker
+        dockerfile: "Dockerfile-${PHP_VERSION}"
+      volumes_from:
+        - applications
+      volumes:
+            - ${PHP_WORKER_SUPERVISORD_CONF}:/etc/supervisord.conf
+      depends_on:
+        - workspace
+      extra_hosts:
+        - "dockerhost:${DOCKER_HOST_IP}"
 
 ### Nginx Server Container ##################################
 
@@ -67,6 +90,7 @@ services:
         volumes:
             - ${NGINX_HOST_LOG_PATH}:/var/log/nginx
             - ${NGINX_SITES_PATH}:/etc/nginx/sites-available
+            - ${NGINX_CONF}:/etc/nginx/nginx.conf
         ports:
             - "${NGINX_HOST_HTTP_PORT}:80"
             - "${NGINX_HOST_HTTPS_PORT}:443"
@@ -85,6 +109,7 @@ services:
             - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
         volumes:
             - mysql:/var/lib/mysql
+            - ${MYSQL_CONF}:/etc/mysql/conf.d/my.cnf
         ports:
             - "${MYSQL_PORT}:3306"
 

@@ -1,17 +1,25 @@
 # DevDock
+
 非常感谢 [laradock](https://github.com/LaraDock/laradock)， [DevDock](https://github.com/RystLee/DevDock) 是简化定制之后的产物，方便学习使用。
+
 
 ## 支持的软件 (镜像)
 
-- **数据库引擎:**
+- **数据库引擎**
     - Mysql
+- **Mysql 管理工具**
+    - phpmyadmin
 - **缓存引擎:**
     - Redis
     - Memcached
-- **PHP 服务器:**
+- **搜索引擎**
+    - elasticsearch
+- **PHP 服务器**
     - Nginx
-- **PHP 编译工具:**
-    - php-fpm (php5.6,php7.0,php7.1)
+- **PHP 进程管理**
+    - php-worker
+- **PHP 编译工具**
+    - php-fpm (php7.1)
 - **工具:**
     - Workspace (PHP7-CLI, SOAP, xDebug, Composer, Git, Node, YARN, Gulp, SQLite, Vim, Nano, cURL...)
 >如果你找不到你需要的软件，构建它然后把它添加到这个列表。
@@ -29,6 +37,8 @@ cd DevDock
 cp .env.example .env
 ```
 
+> 查看 .env 文件你会发现很多环境配置项，在这里可以自行配置开发环境。
+
 ## 启动
 进入到 DevDock 目录中
 
@@ -40,10 +50,10 @@ cp .env.example .env
     applications:
         image: tianon/true
         volumes:
-            - ../:/var/www
+            - ${APPLICATION}:/var/www
 ```
 
-这里将 DevDock 同级目录下的所有文件映射到数据卷容器 applications 中。其实可以你完全可以灵活配置，添加多个映射，例如：
+DevDock 默认将同级目录下的所有文件映射到数据卷容器 applications 中。其实可以你完全可以灵活配置，添加多个映射，例如：
 
 ```yml
     volumes:
@@ -51,7 +61,7 @@ cp .env.example .env
         - ../../project2:/var/www
 ```
 
-创建网站配置文件 参考 nginx/sites/default.conf （不要使用 default.conf，它会在容器中被删除）
+创建网站配置文件 参考 nginx/sites/default.conf （**不要使用 default.conf，它会在容器中被删除**）
 
 ```conf
 server_name laravel.dev;
@@ -76,7 +86,7 @@ root /var/www/laravel/public;
 
 你可以从以下列表选择你自己的容器组合：
 
-nginx, php-fpm, mysql, redis, memcached, elasticsearch, workspace
+nginx, php-fpm, php-worker, mysql, redis, memcached, elasticsearch, workspace
 
 将配置文件中的各种服务的 host 改为相应的**容器名称**，如：DB_HOST: mysql
 
@@ -85,12 +95,18 @@ nginx, php-fpm, mysql, redis, memcached, elasticsearch, workspace
 
 进入 Workspace 容器, 执行像 (Artisan, Composer, Gulp, ...)等命令
 
-`docker-compose exec -it workspace bash`
+`docker-compose exec -it -u devdock workspace bash`
 
 增加 --user=devdock (例如 docker-compose exec --user=devdock workspace bash) 作为您的主机的用户创建的文件. (你可以从 docker-compose.yml 修改 PUID (User id) 和 PGID (group id) 值 )。
 
 
 ## 使用
+
+### 灵活配置开发环境
+
+在 docker-compose.yml 中，引用了很多环境变量，可自行在 .env 进行配置。典型的，我已经将 nginx 目录下 的 sites 目录映射到 nginx 容器，所以当你修改 nginx 网站配置文件后，只要重启 nginx 容器即可：
+
+`docker-compose restart nginx`
 
 ### 常用命令
 
@@ -119,11 +135,11 @@ nginx, php-fpm, mysql, redis, memcached, elasticsearch, workspace
 
 * 列出所有数据卷容器
 
-`docker volume rm <VOLUME NAME>`
+ `docker volume ls` 
 
 * 删除数据卷容器
 
- `docker volume ls` 
+ `docker volume rm <VOLUME NAME>`
 
 * 删除所有数据卷容器
 
@@ -220,27 +236,10 @@ composer require predis/predis:^1.0
 
 PHP 的扩展 FPM 和 CLI 分别安装在 php-fpm 和 workspace 镜像当中，如果需要定制，请分别到 php-fpm/Dockerfile-xx 和 workspace/Dockerfile 文件中编辑。
 
-* 选择 php-fpm 版本
+默认运行 php-fpm 7.1 版本，如需其他版本可以参考 laradock 自行添加。
 
-默认运行 **php-fpm 7.1** 版本
+supervisor 进程管理工具安装在 php-worker 容器中，修改配置重启容器即可生效。
 
-切换版本 PHP 7.0 或 PHP 5.6：
-
-    1. 打开 docker-compose.yml。
-    2. 在PHP容器的 Dockerfile-71 文件。
-    3. 修改版本号, 用 Dockerfile-56 或 Dockerfile-70 替换 Dockerfile-71
-    4. 最后重建PHP容器 `docker-compose build php-fpm`
-
-> 更多关于 PHP 基础镜像, 请访问 [PHP Docker官方镜像](https://hub.docker.com/_/php/).
-
-
-* 修改 php-cli 版本
-
-默认运行**php-cli 7.1**版本
-
-> 说明: php-cli 只用于执行 Artisan 和 Composer 等命令，不服务于你的应用代码，这是 php-fpm 的工作，所以编辑php-cli 的版本不是很重要。
-
-php-cli 安装在 workspace 镜像，改变 php-cli 版本你需要编辑 workspace/Dockerfile.
 
 ### 使用自定义域名
 
@@ -260,12 +259,6 @@ php-cli 安装在 workspace 镜像，改变 php-cli 版本你需要编辑 worksp
 server_name laravel.dev;
 ```
 
-
-### 灵活配置 Nignx
-
-在 docker-compose.yml 中，我已经将 sites 目录映射到 nginx 容器，所以当你修改 nginx 网站配置文件后，只要重启 nginx 容器即可：
-
-`docker-compose restart nginx`
 
 ### 使用 Elasticsearch
 
@@ -303,7 +296,6 @@ server_name laravel.dev;
 - 在 php-fpm 和 workspace 项中分别找到 INSTALL_NODE 选项设为 true
 
 - 重建容器 `docker-compose build workspace php-fpm`
-
 
 
 ## Debug
